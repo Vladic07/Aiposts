@@ -4,32 +4,45 @@ import { Send, Star } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { api, ContentProfile, ImageStyle, Post, TextStyle } from "@/lib/api";
 
+export type GenerateDraft = {
+  profile_id?: number | null;
+  topic?: string;
+  goal?: string;
+  platforms?: string[];
+};
+
 type GeneratePanelProps = {
   profiles: ContentProfile[];
   textStyles: TextStyle[];
   imageStyles: ImageStyle[];
+  activeProfileId: number | null;
+  draft: GenerateDraft | null;
   onGenerated: (post: Post) => void;
 };
 
-export function GeneratePanel({ profiles, textStyles, imageStyles, onGenerated }: GeneratePanelProps) {
+export function GeneratePanel({ profiles, textStyles, imageStyles, activeProfileId, draft, onGenerated }: GeneratePanelProps) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Post | null>(null);
+  const [profileId, setProfileId] = useState(draft?.profile_id ? String(draft.profile_id) : activeProfileId ? String(activeProfileId) : "");
+  const [topic, setTopic] = useState(draft?.topic || "");
+  const [goal, setGoal] = useState(draft?.goal || "");
+  const [platformsText, setPlatformsText] = useState((draft?.platforms?.length ? draft.platforms : ["instagram", "facebook", "x"]).join(","));
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const platforms = String(form.get("platforms") || "instagram,facebook,x")
+    const platforms = platformsText
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
     setBusy(true);
     try {
       const post = await api.generatePost({
-        profile_id: Number(form.get("profile_id")),
+        profile_id: Number(profileId),
         text_style_id: form.get("text_style_id") ? Number(form.get("text_style_id")) : null,
         image_style_id: form.get("image_style_id") ? Number(form.get("image_style_id")) : null,
-        topic: String(form.get("topic") || ""),
-        goal: String(form.get("goal") || ""),
+        topic,
+        goal,
         platforms,
         generation_mode: form.get("generation_mode"),
         language: form.get("language") || "ru",
@@ -49,15 +62,27 @@ export function GeneratePanel({ profiles, textStyles, imageStyles, onGenerated }
         <div className="mt-4 grid gap-3">
           <label className="grid gap-1 text-sm font-medium text-neutral-700">
             Topic
-            <textarea required name="topic" className="min-h-24 rounded-md border border-neutral-300 px-3 py-2 outline-none focus:border-neutral-900" />
+            <textarea
+              required
+              name="topic"
+              value={topic}
+              onChange={(event) => setTopic(event.target.value)}
+              className="min-h-24 rounded-md border border-neutral-300 px-3 py-2 outline-none focus:border-neutral-900"
+            />
           </label>
           <label className="grid gap-1 text-sm font-medium text-neutral-700">
             Goal
-            <input name="goal" className="rounded-md border border-neutral-300 px-3 py-2 outline-none focus:border-neutral-900" />
+            <input name="goal" value={goal} onChange={(event) => setGoal(event.target.value)} className="rounded-md border border-neutral-300 px-3 py-2 outline-none focus:border-neutral-900" />
           </label>
           <label className="grid gap-1 text-sm font-medium text-neutral-700">
             Content Profile
-            <select required name="profile_id" className="rounded-md border border-neutral-300 px-3 py-2 outline-none focus:border-neutral-900">
+            <select
+              required
+              name="profile_id"
+              value={profileId}
+              onChange={(event) => setProfileId(event.target.value)}
+              className="rounded-md border border-neutral-300 px-3 py-2 outline-none focus:border-neutral-900"
+            >
               <option value="">Select profile</option>
               {profiles.map((profile) => (
                 <option key={profile.id} value={profile.id}>
@@ -104,11 +129,16 @@ export function GeneratePanel({ profiles, textStyles, imageStyles, onGenerated }
             </label>
             <label className="grid gap-1 text-sm font-medium text-neutral-700">
               Platforms
-              <input name="platforms" defaultValue="instagram,facebook,x" className="rounded-md border border-neutral-300 px-3 py-2 outline-none focus:border-neutral-900" />
+              <input
+                name="platforms"
+                value={platformsText}
+                onChange={(event) => setPlatformsText(event.target.value)}
+                className="rounded-md border border-neutral-300 px-3 py-2 outline-none focus:border-neutral-900"
+              />
             </label>
           </div>
         </div>
-        <button disabled={busy || profiles.length === 0} className="mt-4 inline-flex items-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white">
+        <button disabled={busy || profiles.length === 0 || !profileId} className="mt-4 inline-flex items-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white">
           <Send size={16} />
           Generate
         </button>

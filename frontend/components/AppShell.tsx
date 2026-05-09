@@ -1,10 +1,12 @@
 "use client";
 
-import { History, Image, LayoutDashboard, MessageSquareText, PenLine, Settings, Sparkles } from "lucide-react";
+import { Check, History, Image, LayoutDashboard, MessageSquareText, PenLine, Settings, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api, ContentProfile, ImageStyle, Post, Settings as AppSettings, TextStyle } from "@/lib/api";
-import { GeneratePanel } from "@/components/GeneratePanel";
+import { GenerateDraft, GeneratePanel } from "@/components/GeneratePanel";
+import { HistoryWorkspace } from "@/components/HistoryWorkspace";
 import { ResourceManager } from "@/components/ResourceManager";
+import { SettingsPanel } from "@/components/SettingsPanel";
 
 type View = "dashboard" | "profiles" | "text" | "image" | "generate" | "history" | "settings";
 
@@ -25,6 +27,8 @@ export function AppShell() {
   const [imageStyles, setImageStyles] = useState<ImageStyle[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [activeProfileId, setActiveProfileId] = useState<number | null>(null);
+  const [generateDraft, setGenerateDraft] = useState<GenerateDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function refresh() {
@@ -42,6 +46,12 @@ export function AppShell() {
       setImageStyles(imageData);
       setPosts(postData);
       setSettings(settingsData);
+      setActiveProfileId((current) => {
+        if (current && profileData.some((profile) => profile.id === current)) {
+          return current;
+        }
+        return profileData[0]?.id ?? null;
+      });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to load data");
     }
@@ -62,6 +72,18 @@ export function AppShell() {
     ],
     [profiles.length, textStyles.length, imageStyles.length, posts.length],
   );
+  const activeProfile = profiles.find((profile) => profile.id === activeProfileId) ?? null;
+
+  function reusePost(post: Post) {
+    setActiveProfileId(post.profile_id);
+    setGenerateDraft({
+      profile_id: post.profile_id,
+      topic: post.topic,
+      goal: post.goal || "",
+      platforms: post.platforms,
+    });
+    setView("generate");
+  }
 
   return (
     <main className="min-h-screen">
@@ -106,6 +128,20 @@ export function AppShell() {
                 ))}
               </div>
               <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="font-semibold">Active profile</h2>
+                    <p className="mt-1 text-sm text-neutral-600">
+                      {activeProfile ? `${activeProfile.name} ${activeProfile.platforms.length ? `for ${activeProfile.platforms.join(", ")}` : ""}` : "Create a profile to start generating."}
+                    </p>
+                  </div>
+                  <button onClick={() => setView("profiles")} className="inline-flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-50">
+                    <Check size={16} />
+                    Choose
+                  </button>
+                </div>
+              </div>
+              <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
                 <h2 className="font-semibold">Latest posts</h2>
                 <div className="mt-3 grid gap-2">
                   {posts.slice(0, 5).map((post) => (
@@ -136,7 +172,18 @@ export function AppShell() {
                 await api.createProfile(data);
                 await refresh();
               }}
+              onUpdate={async (id, data) => {
+                await api.updateProfile(id, data);
+                await refresh();
+              }}
+              onDelete={async (id) => {
+                await api.deleteProfile(id);
+                await refresh();
+              }}
               onRefresh={refresh}
+              activeItemId={activeProfileId}
+              onSelectItem={(item) => setActiveProfileId(item.id)}
+              selectLabel="Set Active"
               renderMeta={(item) => (
                 <>
                   <div>{item.profile_type || "Custom profile"}</div>
@@ -159,6 +206,14 @@ export function AppShell() {
               ]}
               onCreate={async (data) => {
                 await api.createTextStyle(data);
+                await refresh();
+              }}
+              onUpdate={async (id, data) => {
+                await api.updateTextStyle(id, data);
+                await refresh();
+              }}
+              onDelete={async (id) => {
+                await api.deleteTextStyle(id);
                 await refresh();
               }}
               onRefresh={refresh}
@@ -186,6 +241,14 @@ export function AppShell() {
                 await api.createImageStyle(data);
                 await refresh();
               }}
+              onUpdate={async (id, data) => {
+                await api.updateImageStyle(id, data);
+                await refresh();
+              }}
+              onDelete={async (id) => {
+                await api.deleteImageStyle(id);
+                await refresh();
+              }}
               onRefresh={refresh}
               renderMeta={(item) => (
                 <>
@@ -197,33 +260,42 @@ export function AppShell() {
           ) : null}
           {view === "generate" ? (
             <GeneratePanel
+              key={`${activeProfileId || "none"}-${generateDraft?.profile_id || "none"}-${generateDraft?.topic || ""}-${generateDraft?.platforms?.join(".") || ""}`}
               profiles={profiles}
               textStyles={textStyles}
               imageStyles={imageStyles}
+              activeProfileId={activeProfileId}
+              draft={generateDraft}
               onGenerated={(post) => {
                 setPosts((current) => [post, ...current.filter((item) => item.id !== post.id)]);
+                setGenerateDraft(null);
               }}
             />
           ) : null}
           {view === "history" ? (
-            <div className="grid gap-3">
-              <h1 className="text-2xl font-semibold">History</h1>
-              {posts.map((post) => (
-                <article key={post.id} className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h2 className="font-semibold">{post.topic}</h2>
-                    <span className="rounded-md bg-neutral-100 px-2 py-1 text-xs">{post.status}</span>
-                  </div>
-                  <pre className="mt-3 max-h-80 overflow-auto rounded-md bg-neutral-950 p-3 text-xs text-neutral-50">{JSON.stringify(post.generated_content, null, 2)}</pre>
-                </article>
-              ))}
-            </div>
+            <HistoryWorkspace
+              posts={posts}
+              profiles={profiles}
+              onRefresh={refresh}
+              onReusePost={reusePost}
+              onUpdatePost={async (id, data) => {
+                const updated = await api.updatePost(id, data);
+                setPosts((current) => current.map((post) => (post.id === id ? updated : post)));
+              }}
+              onDeletePost={async (id) => {
+                await api.deletePost(id);
+                setPosts((current) => current.filter((post) => post.id !== id));
+              }}
+            />
           ) : null}
           {view === "settings" ? (
-            <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-              <h1 className="text-2xl font-semibold">Settings</h1>
-              <pre className="mt-4 overflow-auto rounded-md bg-neutral-950 p-4 text-xs text-neutral-50">{JSON.stringify(settings, null, 2)}</pre>
-            </div>
+            <SettingsPanel
+              settings={settings}
+              onSave={async (data) => {
+                const updated = await api.updateSettings(data);
+                setSettings(updated);
+              }}
+            />
           ) : null}
         </section>
       </div>
