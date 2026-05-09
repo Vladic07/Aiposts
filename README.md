@@ -24,7 +24,7 @@ Create `.env` from `.env.example`:
 cp .env.example .env
 ```
 
-Set `OPENAI_API_KEY` to enable real AI generation. Without it, the backend returns structured fallback content so the app remains usable.
+Set `OPENAI_API_KEY` to enable real AI generation. Without it, the backend returns structured fallback content so the app remains usable. The default text model is controlled by Settings and can also be overridden with `DEFAULT_TEXT_MODEL`.
 
 ## Run With Docker Compose
 

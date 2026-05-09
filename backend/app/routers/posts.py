@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai_service import generate_post_content
+from app.ai_service import AIServiceError, generate_post_content
 from app.database import get_session
-from app.models import ContentProfile, GenerationSession, ImageStyle, Post, TextStyle
+from app.models import ContentProfile, GenerationSession, ImageStyle, Post, Settings, TextStyle
 from app.routers.utils import apply_updates, current_user_id, not_found
 from app.schemas import GeneratePostRequest, PostRead, PostUpdate
 
@@ -34,8 +34,15 @@ def generate_post(payload: GeneratePostRequest, session: Session = Depends(get_s
         raise not_found("Content profile")
     text_style = session.get(TextStyle, payload.text_style_id) if payload.text_style_id else None
     image_style = session.get(ImageStyle, payload.image_style_id) if payload.image_style_id else None
+    if payload.model is None:
+        settings = session.scalar(select(Settings).where(Settings.user_id == user_id))
+        if settings:
+            payload = payload.model_copy(update={"model": settings.text_model})
 
-    result, model_used = generate_post_content(payload, profile, text_style, image_style)
+    try:
+        result, model_used = generate_post_content(payload, profile, text_style, image_style)
+    except AIServiceError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     result_dict = result.model_dump()
 
     generation_session = GenerationSession(

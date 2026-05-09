@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import os
 
-from openai import OpenAI
+from openai import APIError, OpenAI
 from pydantic import ValidationError
 
 from app.models import ContentProfile, ImageStyle, TextStyle
 from app.prompt_builder import build_generation_prompt
 from app.schemas import GeneratePostRequest, GeneratedResult
+
+
+class AIServiceError(RuntimeError):
+    pass
 
 
 def fallback_generation(
@@ -75,7 +79,7 @@ def generate_post_content(
     text_style: TextStyle | None,
     image_style: ImageStyle | None,
 ) -> tuple[GeneratedResult, str]:
-    model = request.model or os.getenv("DEFAULT_TEXT_MODEL", "gpt-4.1-mini")
+    model = request.model or os.getenv("DEFAULT_TEXT_MODEL", "gpt-5.4-mini")
     if not os.getenv("OPENAI_API_KEY"):
         return fallback_generation(request, profile, text_style, image_style), "fallback-local"
 
@@ -91,5 +95,9 @@ def generate_post_content(
         if parsed:
             return parsed, model
         return GeneratedResult.model_validate_json(response.output_text), model
-    except (ValidationError, Exception):
-        return fallback_generation(request, profile, text_style, image_style), "fallback-local"
+    except ValidationError as exc:
+        raise AIServiceError(f"OpenAI returned invalid generation JSON: {exc}") from exc
+    except APIError as exc:
+        raise AIServiceError(f"OpenAI generation failed: {exc.message}") from exc
+    except Exception as exc:
+        raise AIServiceError(f"OpenAI generation failed: {exc}") from exc

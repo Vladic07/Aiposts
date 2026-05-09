@@ -7,8 +7,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import get_session
+from app import ai_service
 from app.main import app
 from app.models import Base, ensure_default_user
+from app.schemas import GeneratePostRequest
 
 
 @pytest.fixture()
@@ -37,6 +39,17 @@ def test_health_reports_ok(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_default_settings_use_current_model_defaults(client: TestClient) -> None:
+    response = client.get("/api/settings")
+
+    assert response.status_code == 200
+    settings = response.json()
+    assert settings["text_model"] == "gpt-5.4-mini"
+    assert settings["fast_model"] == "gpt-5.4-mini"
+    assert settings["quality_model"] == "gpt-5.4"
+    assert settings["image_model"] == "gpt-image-1.5"
 
 
 def test_content_profile_crud(client: TestClient) -> None:
@@ -192,10 +205,10 @@ def test_settings_can_be_updated(client: TestClient) -> None:
         "/api/settings",
         json={
             "provider": "openai",
-            "text_model": "gpt-4.1-mini",
-            "fast_model": "gpt-4.1-mini",
-            "quality_model": "gpt-4.1",
-            "image_model": "gpt-image-1",
+            "text_model": "gpt-5.4-mini",
+            "fast_model": "gpt-5.4-mini",
+            "quality_model": "gpt-5.4",
+            "image_model": "gpt-image-1.5",
             "daily_generation_limit": 25,
             "default_language": "en",
         },
@@ -244,3 +257,103 @@ def test_generation_with_unknown_profile_returns_404(client: TestClient, monkeyp
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Content profile not found"
+
+
+def test_generation_uses_settings_text_model_when_request_model_is_empty(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    profile = client.post(
+        "/api/content-profiles",
+        json={"name": "Settings profile", "profile_type": "expert"},
+    ).json()
+    client.put("/api/settings", json={"text_model": "gpt-settings-model"})
+    captured_model: list[str | None] = []
+
+    def fake_generate_post_content(payload, profile, text_style, image_style):
+        captured_model.append(payload.model)
+        return ai_service.fallback_generation(payload, profile, text_style, image_style), "fake-model"
+
+    monkeypatch.setattr("app.routers.posts.generate_post_content", fake_generate_post_content)
+
+    response = client.post(
+        "/api/posts/generate",
+        json={"profile_id": profile["id"], "topic": "Use settings model"},
+    )
+
+    assert response.status_code == 201
+    assert captured_model == ["gpt-settings-model"]
+
+
+def test_generation_request_model_overrides_settings_model(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    profile = client.post(
+        "/api/content-profiles",
+        json={"name": "Override profile", "profile_type": "expert"},
+    ).json()
+    client.put("/api/settings", json={"text_model": "gpt-settings-model"})
+    captured_model: list[str | None] = []
+
+    def fake_generate_post_content(payload, profile, text_style, image_style):
+        captured_model.append(payload.model)
+        return ai_service.fallback_generation(payload, profile, text_style, image_style), "fake-model"
+
+    monkeypatch.setattr("app.routers.posts.generate_post_content", fake_generate_post_content)
+
+    response = client.post(
+        "/api/posts/generate",
+        json={"profile_id": profile["id"], "topic": "Use explicit model", "model": "gpt-explicit-model"},
+    )
+
+    assert response.status_code == 201
+    assert captured_model == ["gpt-explicit-model"]
+
+
+def test_openai_api_error_is_not_silently_replaced_with_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    request = GeneratePostRequest(profile_id=1, topic="API error")
+    profile = type(
+        "Profile",
+        (),
+        {
+            "name": "API profile",
+            "profile_type": "expert",
+            "audience": "builders",
+            "positioning": None,
+            "tone": None,
+            "forbidden_words": None,
+            "avoid_topics": None,
+        },
+    )()
+
+    class FailingResponses:
+        def parse(self, **kwargs):
+            raise RuntimeError("upstream failed")
+
+    class FailingClient:
+        responses = FailingResponses()
+
+    monkeypatch.setattr(ai_service, "OpenAI", lambda: FailingClient())
+
+    with pytest.raises(ai_service.AIServiceError) as raised:
+        ai_service.generate_post_content(request, profile, None, None)
+
+    assert "OpenAI generation failed" in str(raised.value)
+
+
+def test_generation_service_error_returns_502(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    profile = client.post(
+        "/api/content-profiles",
+        json={"name": "Error profile", "profile_type": "expert"},
+    ).json()
+
+    def fake_generate_post_content(payload, profile, text_style, image_style):
+        raise ai_service.AIServiceError("OpenAI generation failed: upstream failed")
+
+    monkeypatch.setattr("app.routers.posts.generate_post_content", fake_generate_post_content)
+
+    response = client.post(
+        "/api/posts/generate",
+        json={"profile_id": profile["id"], "topic": "Surface error"},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "OpenAI generation failed: upstream failed"

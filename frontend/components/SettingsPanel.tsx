@@ -19,10 +19,10 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps) {
     try {
       await onSave({
         provider: String(form.get("provider") || "openai"),
-        text_model: String(form.get("text_model") || "gpt-4.1-mini"),
-        fast_model: String(form.get("fast_model") || "gpt-4.1-mini"),
-        quality_model: String(form.get("quality_model") || "gpt-4.1"),
-        image_model: String(form.get("image_model") || "gpt-image-1"),
+        text_model: String(form.get("text_model") || "gpt-5.4-mini"),
+        fast_model: String(form.get("fast_model") || "gpt-5.4-mini"),
+        quality_model: String(form.get("quality_model") || "gpt-5.4"),
+        image_model: String(form.get("image_model") || "gpt-image-1.5"),
         daily_generation_limit: Number(form.get("daily_generation_limit") || 100),
         default_language: String(form.get("default_language") || "ru"),
       });

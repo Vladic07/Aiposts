@@ -2,7 +2,7 @@
 
 import { Send, Star } from "lucide-react";
 import { FormEvent, useState } from "react";
-import { api, ContentProfile, ImageStyle, Post, TextStyle } from "@/lib/api";
+import { api, ContentProfile, ImageStyle, Post, Settings, TextStyle } from "@/lib/api";
 
 export type GenerateDraft = {
   profile_id?: number | null;
@@ -15,12 +15,13 @@ type GeneratePanelProps = {
   profiles: ContentProfile[];
   textStyles: TextStyle[];
   imageStyles: ImageStyle[];
+  settings: Settings | null;
   activeProfileId: number | null;
   draft: GenerateDraft | null;
   onGenerated: (post: Post) => void;
 };
 
-export function GeneratePanel({ profiles, textStyles, imageStyles, activeProfileId, draft, onGenerated }: GeneratePanelProps) {
+export function GeneratePanel({ profiles, textStyles, imageStyles, settings, activeProfileId, draft, onGenerated }: GeneratePanelProps) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Post | null>(null);
   const [profileId, setProfileId] = useState(draft?.profile_id ? String(draft.profile_id) : activeProfileId ? String(activeProfileId) : "");
@@ -44,6 +45,7 @@ export function GeneratePanel({ profiles, textStyles, imageStyles, activeProfile
         topic,
         goal,
         platforms,
+        model: form.get("model") || null,
         generation_mode: form.get("generation_mode"),
         language: form.get("language") || "ru",
         save_to_history: true,
@@ -115,7 +117,20 @@ export function GeneratePanel({ profiles, textStyles, imageStyles, activeProfile
               </select>
             </label>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <label className="grid gap-1 text-sm font-medium text-neutral-700">
+              Model
+              <select name="model" defaultValue="" className="rounded-md border border-neutral-300 px-3 py-2 outline-none focus:border-neutral-900">
+                <option value="">Settings default</option>
+                {settings ? (
+                  <>
+                    <option value={settings.text_model}>Text: {settings.text_model}</option>
+                    <option value={settings.fast_model}>Fast: {settings.fast_model}</option>
+                    <option value={settings.quality_model}>Quality: {settings.quality_model}</option>
+                  </>
+                ) : null}
+              </select>
+            </label>
             <label className="grid gap-1 text-sm font-medium text-neutral-700">
               Mode
               <select name="generation_mode" defaultValue="auto" className="rounded-md border border-neutral-300 px-3 py-2 outline-none focus:border-neutral-900">

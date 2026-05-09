@@ -264,6 +264,7 @@ export function AppShell() {
               profiles={profiles}
               textStyles={textStyles}
               imageStyles={imageStyles}
+              settings={settings}
               activeProfileId={activeProfileId}
               draft={generateDraft}
               onGenerated={(post) => {
