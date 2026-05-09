@@ -5,9 +5,13 @@ import os
 from openai import APIError, OpenAI
 from pydantic import ValidationError
 
+from app.config import load_environment
 from app.models import ContentProfile, ImageStyle, TextStyle
 from app.prompt_builder import build_generation_prompt
 from app.schemas import GeneratePostRequest, GeneratedResult
+
+
+load_environment()
 
 
 class AIServiceError(RuntimeError):
@@ -79,7 +83,7 @@ def generate_post_content(
     text_style: TextStyle | None,
     image_style: ImageStyle | None,
 ) -> tuple[GeneratedResult, str]:
-    model = request.model or os.getenv("DEFAULT_TEXT_MODEL", "gpt-5.4-mini")
+    model = request.model or os.getenv("DEFAULT_TEXT_MODEL", "gpt-5-mini")
     if not os.getenv("OPENAI_API_KEY"):
         return fallback_generation(request, profile, text_style, image_style), "fallback-local"
 

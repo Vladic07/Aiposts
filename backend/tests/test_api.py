@@ -11,6 +11,7 @@ from app import ai_service
 from app.main import app
 from app.models import Base, ensure_default_user
 from app.schemas import GeneratePostRequest
+from app.schemas import GeneratedResult
 
 
 @pytest.fixture()
@@ -46,9 +47,9 @@ def test_default_settings_use_current_model_defaults(client: TestClient) -> None
 
     assert response.status_code == 200
     settings = response.json()
-    assert settings["text_model"] == "gpt-5.4-mini"
-    assert settings["fast_model"] == "gpt-5.4-mini"
-    assert settings["quality_model"] == "gpt-5.4"
+    assert settings["text_model"] == "gpt-5-mini"
+    assert settings["fast_model"] == "gpt-5-mini"
+    assert settings["quality_model"] == "gpt-5.2"
     assert settings["image_model"] == "gpt-image-1.5"
 
 
@@ -205,9 +206,9 @@ def test_settings_can_be_updated(client: TestClient) -> None:
         "/api/settings",
         json={
             "provider": "openai",
-            "text_model": "gpt-5.4-mini",
-            "fast_model": "gpt-5.4-mini",
-            "quality_model": "gpt-5.4",
+            "text_model": "gpt-5-mini",
+            "fast_model": "gpt-5-mini",
+            "quality_model": "gpt-5.2",
             "image_model": "gpt-image-1.5",
             "daily_generation_limit": 25,
             "default_language": "en",
@@ -357,3 +358,12 @@ def test_generation_service_error_returns_502(client: TestClient, monkeypatch: p
 
     assert response.status_code == 502
     assert response.json()["detail"] == "OpenAI generation failed: upstream failed"
+
+
+def test_generated_result_schema_uses_closed_objects_for_openai_structured_outputs() -> None:
+    schema = GeneratedResult.model_json_schema()
+
+    assert schema["$defs"]["PlatformContent"]["additionalProperties"] is False
+    assert schema["$defs"]["StoryFrame"]["additionalProperties"] is False
+    assert schema["$defs"]["ReelContent"]["additionalProperties"] is False
+    assert schema["$defs"]["GeneratedHook"]["additionalProperties"] is False

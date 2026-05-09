@@ -5,7 +5,10 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.config import load_environment
 
+
+load_environment()
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+pysqlite:///./data/ai_content_studio.db")
 
 if DATABASE_URL.startswith("sqlite") and ":///" in DATABASE_URL and ":memory:" not in DATABASE_URL:

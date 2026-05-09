@@ -246,12 +246,47 @@ class SettingsRead(ORMModel):
 
 
 class GeneratedImagePrompt(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     prompt: str
     negative_prompt: str = ""
     text_on_image: str = ""
 
 
+class PlatformContent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    post: str = ""
+    cta: str = ""
+    format_notes: str = ""
+
+
+class StoryFrame(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    screen: int
+    text: str
+    visual_idea: str
+
+
+class ReelContent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    idea: str = ""
+    script: str = ""
+    shot_list: list[str] = Field(default_factory=list)
+
+
+class GeneratedHook(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str
+    why_it_can_work: str
+
+
 class GeneratedAnalysis(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     hook_score: int = Field(ge=0, le=10)
     clarity_score: int = Field(ge=0, le=10)
     originality_score: int = Field(ge=0, le=10)
@@ -264,12 +299,14 @@ class GeneratedAnalysis(BaseModel):
 
 
 class GeneratedResult(BaseModel):
-    instagram: dict[str, Any] = Field(default_factory=dict)
-    facebook: dict[str, Any] = Field(default_factory=dict)
-    x: dict[str, Any] = Field(default_factory=dict)
-    linkedin: dict[str, Any] = Field(default_factory=dict)
-    stories: list[dict[str, Any]] = Field(default_factory=list)
-    reels: dict[str, Any] = Field(default_factory=dict)
+    model_config = ConfigDict(extra="forbid")
+
+    instagram: PlatformContent = Field(default_factory=PlatformContent)
+    facebook: PlatformContent = Field(default_factory=PlatformContent)
+    x: PlatformContent = Field(default_factory=PlatformContent)
+    linkedin: PlatformContent = Field(default_factory=PlatformContent)
+    stories: list[StoryFrame] = Field(default_factory=list)
+    reels: ReelContent = Field(default_factory=ReelContent)
     image_prompt: GeneratedImagePrompt
-    hooks: list[dict[str, Any]] = Field(default_factory=list)
+    hooks: list[GeneratedHook] = Field(default_factory=list)
     analysis: GeneratedAnalysis
